@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -116,6 +117,38 @@ func TestTreeUpdate(t *testing.T) {
 	assert.Equal(t, "otherValue", v)
 }
 
+func TestTreeInsertLimit(t *testing.T) {
+	var testData = []struct {
+		totalNodes int
+	}{
+		{5},
+		{17},
+		{49},
+		{257},
+		{48*256 + 1},
+		{16*48*256 + 1},
+		// {4*16*48*256 + 1},
+	}
+
+	for _, data := range testData {
+		tree := newTree()
+		for i := 0; i < data.totalNodes; i++ {
+			key := strconv.FormatInt(int64(i), 16)
+			tree.Insert(Key(key), i)
+		}
+		for i := 0; i < data.totalNodes; i++ {
+			key := strconv.FormatInt(int64(i), 16)
+			value, founnd := tree.Search(Key(key))
+			assert.Equal(t, true, founnd)
+			assert.Equal(t, i, value)
+		}
+		// if data.totalNodes == 257 {
+		// 	t.Logf("the tree is %s", tree.String())
+		// }
+		assert.Equal(t, data.totalNodes, tree.size)
+	}
+}
+
 func TestTreeInsertSimilarPrefix(t *testing.T) {
 	tree := newTree()
 
@@ -144,6 +177,25 @@ func TestTreeInsert3AndSearchWords(t *testing.T) {
 		assert.True(t, found)
 		assert.Equal(t, term, v)
 	}
+}
+
+// An Art Node with a similar prefix should be split into new nodes accordingly
+// And should be searchable as intended.
+func TestTreeInsert3AndSeek(t *testing.T) {
+	tree := newTree()
+
+	searchTerms := []string{"A", "a", "aa"}
+
+	for _, term := range searchTerms {
+		tree.Insert(Key(term), term)
+	}
+
+	v, found := tree.findNear(Key("Ab"), true)
+	assert.False(t, found)
+	assert.Nil(t, v)
+	v, found = tree.findNear(Key("Ab"), false)
+	assert.False(t, found)
+	assert.Equal(t, "A", v)
 }
 
 func TestTreeInsertAndGrowToBiggerNode(t *testing.T) {

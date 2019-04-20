@@ -31,6 +31,49 @@ func (t *tree) Delete(key Key) (Value, bool) {
 	return nil, false
 }
 
+// findNear finds the leaf near the key
+// if the leaf has key equal to given key, return the value and the bool is true
+func (t *tree) findNear(key Key, isEqual bool) (Value, bool) {
+	current := t.root
+
+	//prefixLen := 0
+	depth := 0
+
+	for current != nil {
+		if current.isLeaf() {
+			leaf := current.leaf()
+			if leaf.match(key) {
+				return leaf.value, true
+			}
+			if !isEqual {
+				return leaf.value, false
+			}
+			return nil, false
+		}
+
+		node := current.node()
+		if node.prefixLen > 0 {
+			prefixLen := node.match(key, depth)
+			if prefixLen != min(node.prefixLen, MaxPrefixLen) {
+				return nil, false
+			}
+			depth += node.prefixLen
+		}
+
+		next := current.findChild(key.charAt(depth))
+		if *next != nil {
+			current = *next
+		} else {
+			if !isEqual {
+				return current.minimum().value, false
+			}
+			current = nil
+		}
+		depth++
+	}
+	return nil, false
+}
+
 func (t *tree) Search(key Key) (Value, bool) {
 	current := t.root
 
