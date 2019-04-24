@@ -10,6 +10,7 @@ type iterator struct {
 
 	tree       *tree
 	nextNode   *artNode
+	prevNode   *artNode
 	depthLevel int
 	depth      []*iteratorLevel
 }
@@ -17,6 +18,7 @@ type iterator struct {
 type bufferedIterator struct {
 	options  int
 	nextNode Node
+	prevNode Node
 	err      error
 	it       *iterator
 }
@@ -175,6 +177,24 @@ func (t *tree) Iterator(opts ...int) Iterator {
 	return bti
 }
 
+// // Iterator pattern
+// func (t *tree) SeekIterator(key Key) Iterator {
+
+// 	it := &iterator{
+// 		version:    t.version,
+// 		tree:       t,
+// 		nextNode:   t.root,
+// 		prevNode:   t.root,
+// 		depthLevel: 0,
+// 		depth:      []*iteratorLevel{{t.root, 0}}}
+
+// 	bti := &bufferedIterator{
+// 		options: TraverseLeaf,
+// 		it:      it,
+// 	}
+// 	return bti
+// }
+
 func (ti *iterator) checkConcurrentModification() error {
 	if ti.version == ti.tree.version {
 		return nil
@@ -185,6 +205,10 @@ func (ti *iterator) checkConcurrentModification() error {
 
 func (ti *iterator) HasNext() bool {
 	return ti != nil && ti.nextNode != nil
+}
+
+func (ti *iterator) HasPrev() bool {
+	return ti != nil && ti.prevNode != nil
 }
 
 func (ti *iterator) Next() (Node, error) {
@@ -202,6 +226,21 @@ func (ti *iterator) Next() (Node, error) {
 	return cur, nil
 }
 
+func (ti *iterator) Prev() (Node, error) {
+	if !ti.HasPrev() {
+		return nil, ErrNoMoreNodes
+	}
+
+	err := ti.checkConcurrentModification()
+	if err != nil {
+		return nil, err
+	}
+
+	cur := ti.prevNode
+	ti.prev()
+	return cur, nil
+}
+
 func nextChild(childIdx int, children []*artNode) (otherChildIdx int, otherNode *artNode) {
 	otherChildIdx, otherNode = -1, nil
 	i, nodeLimit := childIdx, len(children)
@@ -213,6 +252,81 @@ func nextChild(childIdx int, children []*artNode) (otherChildIdx int, otherNode 
 		}
 	}
 	return
+}
+
+func prevChild(childIdx int, children []*artNode) (otherChildIdx int, otherNode *artNode) {
+	otherChildIdx, otherNode = -1, nil
+
+	for i := childIdx; i > 0; i-- {
+		child := children[i]
+		if child != nil {
+			otherChildIdx, otherNode = i, child
+			break
+		}
+	}
+	return
+}
+
+func (ti *iterator) prev() {
+	for {
+		var otherNode *artNode
+		otherChildIdx := -1
+
+		prevNode := ti.depth[ti.depthLevel].node
+		childIdx := ti.depth[ti.depthLevel].childIdx
+
+		switch prevNode.kind {
+		case Node4:
+			otherChildIdx, otherNode = prevChild(childIdx, prevNode.node4().children[:])
+
+		case Node16:
+			otherChildIdx, otherNode = prevChild(childIdx, prevNode.node16().children[:])
+
+		case Node48:
+			node := prevNode.node48()
+			for i := childIdx; i > 0; i-- {
+				idx := node.keys[byte(i)]
+				if idx <= 0 {
+					continue
+				}
+				child := node.children[idx-1]
+				if child != nil {
+					otherChildIdx = i
+					otherNode = child
+					break
+				}
+			}
+
+		case Node256:
+			otherChildIdx, otherNode = prevChild(childIdx, prevNode.node256().children[:])
+		}
+
+		ti.nextNode = ti.prevNode
+		if otherNode == nil {
+			if ti.depthLevel > 0 {
+				// return to previous level
+				ti.depthLevel--
+			} else {
+				ti.prevNode = nil      // done!
+				return
+			}
+		} else {
+			// star from the next when we come back from the child node
+			ti.depth[ti.depthLevel].childIdx = otherChildIdx - 1
+			ti.prevNode = otherNode
+
+			// make sure that w we have enough space for levels
+			if ti.depthLevel+1 >= cap(ti.depth) {
+				newDepthLevel := make([]*iteratorLevel, ti.depthLevel+2)
+				copy(newDepthLevel, ti.depth)
+				ti.depth = newDepthLevel
+			}
+
+			ti.depthLevel++
+			ti.depth[ti.depthLevel] = &iteratorLevel{otherNode, 0}
+			return
+		}
+	}
 }
 
 func (ti *iterator) next() {
@@ -250,6 +364,7 @@ func (ti *iterator) next() {
 			otherChildIdx, otherNode = nextChild(childIdx, nextNode.node256().children[:])
 		}
 
+		ti.prevNode = ti.nextNode
 		if otherNode == nil {
 			if ti.depthLevel > 0 {
 				// return to previous level
@@ -296,4 +411,25 @@ func (bti *bufferedIterator) HasNext() bool {
 
 func (bti *bufferedIterator) Next() (Node, error) {
 	return bti.nextNode, bti.err
+}
+
+func (bti *bufferedIterator) HasPrev() bool {
+	for bti.it.HasPrev() {
+		bti.prevNode, bti.err = bti.it.Prev()
+		if bti.err != nil {
+			return true
+		}
+		if bti.options&TraverseLeaf == TraverseLeaf && bti.nextNode.Kind() == Leaf {
+			return true
+		} else if bti.options&TraverseNode == TraverseNode && bti.nextNode.Kind() != Leaf {
+			return true
+		}
+	}
+	bti.prevNode = nil
+	bti.err = nil
+	return false
+}
+
+func (bti *bufferedIterator) Prev() (Node, error) {
+	return bti.prevNode, bti.err
 }

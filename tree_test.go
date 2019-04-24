@@ -800,6 +800,18 @@ func TestTreeIterator(t *testing.T) {
 	assert.Nil(t, bad)
 	assert.Equal(t, ErrNoMoreNodes, err)
 
+	assert.True(t, it.HasPrev())
+	v2, err = it.Prev()
+	assert.NoError(t, err)
+	assert.Equal(t, Leaf, v2.Kind())
+	assert.Equal(t, v2.Value() , []byte{2})
+
+	assert.True(t, it.HasPrev())
+	v1, err = it.Prev()
+	assert.NoError(t, err)
+	assert.Equal(t, v1.Value(), []byte{2})
+
+	assert.False(t, it.HasPrev())
 }
 
 func TestTreeIteratorConcurrentModification(t *testing.T) {

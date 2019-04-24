@@ -62,6 +62,9 @@ type Node interface {
 type Iterator interface {
 	// Returns true if the iteration has more nodes when traversing the tree.
 	HasNext() bool
+	// Returns true if the iteration has more nodes when traversing the tree.
+	HasPrev() bool
+
 
 	// Returns the next element in the tree and advances the iterator position.
 	// Returns ErrNoMoreNodes error if there are no more nodes in the tree.
@@ -69,6 +72,13 @@ type Iterator interface {
 	// Returns ErrConcurrentModification error if the tree has been structurally
 	// modified after the iterator was created.
 	Next() (Node, error)
+	// Returns the previous element in the tree and advances the iterator position.
+	// Returns ErrNoMoreNodes error if there are no more nodes in the tree.
+	// Check if there is a previous node with HasPrev method.
+	// Returns ErrConcurrentModification error if the tree has been structurally
+	// modified after the iterator was created.
+	Prev() (Node, error)
+
 }
 
 // Tree is an Adaptive Radix Tree interface.
