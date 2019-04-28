@@ -79,6 +79,11 @@ type Iterator interface {
 	// modified after the iterator was created.
 	Prev() (Node, error)
 
+	// Seek advances to the node with a key <= target
+	Seek(key Key)
+
+	// Value returns the leaf's value
+	Value() Value
 }
 
 // Tree is an Adaptive Radix Tree interface.

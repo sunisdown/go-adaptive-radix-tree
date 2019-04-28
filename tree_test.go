@@ -773,6 +773,42 @@ func TestTreeTraversalPrefixWords(t *testing.T) {
 	})
 }
 
+func TestTreeBufferedIterator(t *testing.T) {
+	tree := newTree()
+	tree.Insert(Key("2"), []byte{2})
+	tree.Insert(Key("1"), []byte{1})
+
+	it := tree.Iterator(TraverseLeaf)
+	assert.NotNil(t, it)
+	assert.True(t, it.HasNext())
+	v1, err := it.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, v1.Value(), []byte{1})
+
+	assert.True(t, it.HasNext())
+	v2, err := it.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, v2.Value(), []byte{2})
+
+	assert.False(t, it.HasNext())
+	bad, err := it.Next()
+	assert.Nil(t, bad)
+	assert.Nil(t, err)
+
+	assert.True(t, it.HasPrev())
+	v2, err = it.Prev()
+	assert.NoError(t, err)
+	assert.Equal(t, Leaf, v2.Kind())
+	assert.Equal(t, v2.Value(), []byte{2})
+
+	assert.True(t, it.HasPrev())
+	v1, err = it.Prev()
+	assert.NoError(t, err)
+	assert.Equal(t, v1.Value(), []byte{2})
+
+	assert.False(t, it.HasPrev())
+}
+
 func TestTreeIterator(t *testing.T) {
 	tree := newTree()
 	tree.Insert(Key("2"), []byte{2})
@@ -804,7 +840,7 @@ func TestTreeIterator(t *testing.T) {
 	v2, err = it.Prev()
 	assert.NoError(t, err)
 	assert.Equal(t, Leaf, v2.Kind())
-	assert.Equal(t, v2.Value() , []byte{2})
+	assert.Equal(t, v2.Value(), []byte{2})
 
 	assert.True(t, it.HasPrev())
 	v1, err = it.Prev()
@@ -812,6 +848,60 @@ func TestTreeIterator(t *testing.T) {
 	assert.Equal(t, v1.Value(), []byte{2})
 
 	assert.False(t, it.HasPrev())
+}
+
+func TestIteratorSeek(t *testing.T) {
+	const n = 100
+	tree := newTree()
+	for i := n - 1; i >= 0; i-- {
+		value := i*10 + 1000
+		tree.Insert(Key(strconv.Itoa(value)), value)
+	}
+
+	it := tree.Iterator(TraverseLeaf)
+	it.Seek(Key(strconv.Itoa(1005)))
+	v, err := it.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, Key(strconv.Itoa(1000)), v.Key())
+	assert.Equal(t, 1000, v.Value())
+
+	it.Seek(Key(strconv.Itoa(1050)))
+	t.Logf("Seek to the iterator %v", it)
+	assert.True(t, it.HasNext())
+	v, err = it.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, Key(strconv.Itoa(1050)), v.Key())
+	assert.Equal(t, 1050, v.Value())
+
+	assert.True(t, it.HasNext())
+	v, err = it.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, Key(strconv.Itoa(1050)), v.Key())
+	assert.Equal(t, 1050, v.Value())
+
+	assert.True(t, it.HasNext())
+	v, err = it.Next()
+	assert.Nil(t, err)
+	assert.Equal(t, Key(strconv.Itoa(1060)), v.Key())
+	assert.Equal(t, 1060, v.Value())
+
+	assert.True(t, it.HasPrev())
+	v, err = it.Prev()
+	assert.Nil(t, err)
+	assert.Equal(t, Key(strconv.Itoa(1060)), v.Key())
+	assert.Equal(t, 1060, v.Value())
+
+	assert.True(t, it.HasPrev())
+	v, err = it.Prev()
+	assert.Nil(t, err)
+	assert.Equal(t, Key(strconv.Itoa(1080)), v.Key())
+	assert.Equal(t, 1080, v.Value())
+
+	assert.True(t, it.HasPrev())
+	v, err = it.Prev()
+	assert.Nil(t, err)
+	assert.Equal(t, Key(strconv.Itoa(1070)), v.Key())
+	assert.Equal(t, 1070, v.Value())
 }
 
 func TestTreeIteratorConcurrentModification(t *testing.T) {

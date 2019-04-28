@@ -149,6 +149,13 @@ func (an *artNode) setPrefix(key Key, prefixLen int) *artNode {
 	return an
 }
 
+func (l *leaf) compareKey(key Key) int {
+	if key == nil  {
+		return -1
+	}
+	return bytes.Compare(l.key[:len(key)], key)
+}
+
 func (l *leaf) match(key Key) bool {
 	if key == nil || len(l.key) != len(key) {
 		return false
@@ -305,6 +312,24 @@ func (an *artNode) index(c byte) int {
 	}
 
 	return -1
+}
+
+func (an *artNode) findChildByIndex(idx int) **artNode {
+	if idx < 0 {
+		return &nullNode
+	}
+	switch an.kind {
+	case Node4:
+		return &an.node4().children[idx]
+	case Node16:
+		return &an.node16().children[idx]
+	case Node48:
+		return &an.node48().children[idx]
+	case Node256:
+		return &an.node256().children[idx]
+	}
+	return &nullNode
+
 }
 
 func (an *artNode) findChild(c byte) **artNode {
